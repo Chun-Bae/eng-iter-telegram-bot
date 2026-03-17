@@ -2,10 +2,10 @@ import os
 import sqlite3
 import time
 import threading
-import shlex
 from dotenv import load_dotenv
 import telebot
 
+# 1. 환경 변수 로드
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 if not TOKEN:
@@ -54,6 +54,16 @@ def get_db():
     return sqlite3.connect("study.db", check_same_thread=False)
 
 
+def split_content(text):
+    """구분자(ㅡ, -, —)를 기준으로 텍스트를 원문과 번역으로 나눕니다."""
+    for sep in ['ㅡ', '—', '-']:
+        if sep in text:
+            parts = text.split(sep, 1)
+            if len(parts) == 2:
+                return [p.strip() for p in parts]
+    return None
+
+
 @bot.message_handler(func=lambda m: m.text.startswith('!'))
 def handle_cli_commands(message):
     try:
@@ -64,17 +74,23 @@ def handle_cli_commands(message):
             "UPDATE settings SET value = ? WHERE key = 'chat_id'", (str(message.chat.id),))
         conn.commit()
 
-        args = shlex.split(message.text)
+        text = message.text.strip()
+        args = text.split()
         cmd = args[0]
 
         # [C]reate: !c 원문ㅡ번역
         if cmd == "!c":
-            content = " ".join(args[1:])
-            origin, trans = content.split('ㅡ')
-            cur.execute("INSERT INTO sentences (sentence, words, sent_count, last_sent_at) VALUES (?, ?, 0, 0)",
-                        (origin.strip(), trans.strip()))
-            conn.commit()
-            bot.reply_to(message, f"✅ [Created] ID: {cur.lastrowid}")
+            raw_content = text[3:].strip()
+            parsed = split_content(raw_content)
+            
+            if parsed:
+                origin, trans = parsed
+                cur.execute("INSERT INTO sentences (sentence, words, sent_count, last_sent_at) VALUES (?, ?, 0, 0)",
+                            (origin, trans))
+                conn.commit()
+                bot.reply_to(message, f"✅ [Created] ID: {cur.lastrowid}\n英: {origin}\n韓: {trans}")
+            else:
+                raise ValueError("Format Error")
 
         # [R]ead: !r id
         elif cmd == "!r":
@@ -88,12 +104,18 @@ def handle_cli_commands(message):
         # [U]pdate: !u id 원문ㅡ번역
         elif cmd == "!u":
             target_id = args[1]
-            content = " ".join(args[2:])
-            origin, trans = content.split('ㅡ')
-            cur.execute("UPDATE sentences SET sentence = ?, words = ? WHERE id = ?",
-                        (origin.strip(), trans.strip(), target_id))
-            conn.commit()
-            bot.reply_to(message, f"🆙 [Updated] ID: {target_id}")
+            # !u와 id 뒤의 내용을 추출
+            raw_content = text.replace(cmd, "", 1).replace(target_id, "", 1).strip()
+            parsed = split_content(raw_content)
+            
+            if parsed:
+                origin, trans = parsed
+                cur.execute("UPDATE sentences SET sentence = ?, words = ? WHERE id = ?",
+                            (origin, trans, target_id))
+                conn.commit()
+                bot.reply_to(message, f"🆙 [Updated] ID: {target_id}\n英: {origin}\n韓: {trans}")
+            else:
+                raise ValueError("Format Error")
 
         # [D]elete: !d id
         elif cmd == "!d":
@@ -123,6 +145,8 @@ def handle_cli_commands(message):
 
     except Exception as e:
         bot.reply_to(message, "⚠️ 형식 오류!\n!c 원문ㅡ번역 / !u ID 원문ㅡ번역 / !set 초")
+    finally:
+        conn.close()
 
 # 4. 발송 엔진 (마지막 발송 시간 기반 순회)
 
@@ -134,7 +158,9 @@ def delivery_engine():
             cur = conn.cursor()
 
             cur.execute("SELECT value FROM settings WHERE key = 'interval'")
-            interval = int(cur.fetchone()[0])
+            interval_row = cur.fetchone()
+            interval = int(interval_row[0]) if interval_row else 60
+            
             cur.execute("SELECT value FROM settings WHERE key = 'chat_id'")
             res = cur.fetchone()
             chat_id = res[0] if res and res[0] else None
@@ -153,6 +179,7 @@ def delivery_engine():
                                 (int(time.time()), sid))
                     conn.commit()
 
+            conn.close()
             time.sleep(interval)
         except Exception as e:
             print(f"Engine Error: {e}")
