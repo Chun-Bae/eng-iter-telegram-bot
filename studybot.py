@@ -146,7 +146,7 @@ def delivery_engine():
 
                 if row:
                     sid, sent, trans = row
-                    clean_msg = f"---\n{sent}\n{trans}\n---"
+                    clean_msg = f"{sent}\n{trans}"
                     bot.send_message(chat_id, clean_msg)
 
                     cur.execute("UPDATE sentences SET sent_count = sent_count + 1, last_sent_at = ? WHERE id = ?",
