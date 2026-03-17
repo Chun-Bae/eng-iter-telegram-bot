@@ -1,0 +1,18 @@
+[Unit]
+Description=Chun-Bae English Study Telegram Bot
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/eng-iter-telegram-bot
+
+ExecStart=/home/ubuntu/eng-iter-telegram-bot/venv/bin/python /home/ubuntu/eng-iter-telegram-bot/studybot.py
+
+Restart=always
+RestartSec=5
+
+EnvironmentFile=/home/ubuntu/eng-iter-telegram-bot/.env
+
+[Install]
+WantedBy=multi-user.target

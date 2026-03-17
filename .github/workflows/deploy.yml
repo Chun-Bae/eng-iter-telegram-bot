@@ -1,0 +1,45 @@
+name: Eng Study Telegram Bot Deployment
+
+on:
+  push:
+    branches:
+      - main 
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to OCI via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.OCI_ADDR }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            mkdir -p ~/eng-iter-telegram-bot
+            cd ~/eng-iter-telegram-bot
+
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              git pull origin main
+            fi
+
+            if [ ! -d "venv" ]; then
+              python3 -m venv venv
+            fi
+
+            source venv/bin/activate
+            pip install --upgrade pip
+            if [ -f "requirements.txt" ]; then
+              pip install -r requirements.txt
+            fi
+
+            echo "TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}" > .env
+            
+            sudo cp ~/eng-iter-telegram-bot/scripts/studybot.service /etc/systemd/system/studybot.service
+            sudo systemctl restart studybot
