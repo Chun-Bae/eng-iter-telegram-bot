@@ -6,16 +6,16 @@ from dotenv import load_dotenv
 import telebot
 
 load_dotenv()
-TOKEN = os.getenv('TELEGRAM_TOKEN_CONV')
+TOKEN = os.getenv('TELEGRAM_TOKEN_TOEIC')
 if not TOKEN:
-    raise ValueError("TELEGRAM_TOKEN_CONV이 .env 파일에 설정되지 않았습니다.")
+    raise ValueError("TELEGRAM_TOKEN_TOEIC이 .env 파일에 설정되지 않았습니다.")
 
 bot = telebot.TeleBot(TOKEN)
 
 config_update_event = threading.Event()
 
 def init_db():
-    conn = sqlite3.connect("db/conv.db")
+    conn = sqlite3.connect("db/toeic.db")
     cur = conn.cursor()
     cur.execute('''
         CREATE TABLE IF NOT EXISTS sentences (
@@ -38,7 +38,7 @@ def init_db():
     conn.close()
 
 def get_db():
-    return sqlite3.connect("db/conv.db", check_same_thread=False)
+    return sqlite3.connect("db/toeic.db", check_same_thread=False)
 
 def split_content(text):
     for sep in ['ㅡ', '—', '-']:
@@ -102,7 +102,7 @@ def handle_cli_commands(message):
             cur.execute("UPDATE settings SET value = ? WHERE key = 'interval'", (seconds,))
             conn.commit()
             bot.reply_to(message, f"⏱️ [Config] 발송 주기가 {seconds}초로 설정되었습니다.")
-            
+
             config_update_event.set()
 
         elif cmd == "!ls":
@@ -128,7 +128,7 @@ def delivery_engine():
             cur.execute("SELECT value FROM settings WHERE key = 'interval'")
             interval_row = cur.fetchone()
             interval = int(interval_row[0]) if interval_row else 60
-            
+
             cur.execute("SELECT value FROM settings WHERE key = 'chat_id'")
             res = cur.fetchone()
             chat_id = res[0] if res and res[0] else None
@@ -150,7 +150,7 @@ def delivery_engine():
 
             is_set = config_update_event.wait(timeout=interval)
             if is_set:
-                config_update_event.clear() 
+                config_update_event.clear()
 
         except Exception as e:
             print(f"Engine Error: {e}")

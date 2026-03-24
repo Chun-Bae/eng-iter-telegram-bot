@@ -3,7 +3,7 @@ name: Eng Study Telegram Bot Deployment
 on:
   push:
     branches:
-      - main 
+      - main
 
 jobs:
   deploy:
@@ -39,7 +39,18 @@ jobs:
               pip install -r requirements.txt
             fi
 
-            echo "TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}" > .env
-            
-            sudo cp ~/eng-iter-telegram-bot/scripts/studybot.service /etc/systemd/system/studybot.service
-            sudo systemctl restart studybot
+            printf "TELEGRAM_TOKEN_CONV=${{ secrets.TELEGRAM_TOKEN_CONV }}\nTELEGRAM_TOKEN_TOEIC=${{ secrets.TELEGRAM_TOKEN_TOEIC }}\n" > .env
+
+            mkdir -p db
+
+            # study.db -> db/conv.db 마이그레이션 (최초 1회)
+            if [ -f "study.db" ] && [ ! -f "db/conv.db" ]; then
+              cp study.db db/conv.db
+              echo "[migrate] study.db -> db/conv.db"
+            fi
+
+            sudo cp ~/eng-iter-telegram-bot/scripts/convbot.service /etc/systemd/system/convbot.service
+            sudo cp ~/eng-iter-telegram-bot/scripts/toeicbot.service /etc/systemd/system/toeicbot.service
+            sudo systemctl daemon-reload
+            sudo systemctl enable convbot toeicbot
+            sudo systemctl restart convbot toeicbot
